@@ -34,17 +34,15 @@ def parse_homework_status(homework):
     homework_name = homework['homework_name']
 
     if homework['status'] == 'reviewing':
-        verdict = f'Работа "{homework_name}" на ревью.'
-        return verdict
+        return f'Работа "{homework_name}" на ревью.'
 
     elif homework['status'] == 'rejected':
-        verdict = f'К сожалению, в работе нашлись ошибки.'
+        verdict = 'К сожалению, в работе нашлись ошибки.'
 
     else:
-        verdict = f'Ревьюеру всё понравилось, работа зачтена!'
+        verdict = 'Ревьюеру всё понравилось, работа зачтена!'
 
-    message = f'У вас проверили работу "{homework_name}": {verdict}'
-    return message
+    return f'У вас проверили работу "{homework_name}": {verdict}'
 
 
 def get_homeworks(current_timestamp):
@@ -97,12 +95,16 @@ def main():
             if homeworks:
                 try:
                     gitname = homeworks[0]['homework_name'].split('__')[0]
-                    message = f'Для github аккаунта "{gitname}" обновилась информация:\n\n'
+                    message = (
+                        f'Для github аккаунта "{gitname}"',
+                        ' обновилась информация:\n\n'
+                    )
                 except Exception:
                     logging.warning(
-                        f'gitname извлечь не получилось, обновился формат "homework_name"'
+                        'gitname извлечь не получилось,',
+                        ' обновился формат "homework_name"'
                     )
-                    message = f'Oбновилась информация:\n\n'
+                    message = 'Oбновилась информация:\n\n'
 
                 for homework in homeworks:
                     message += parse_homework_status(homework)
