@@ -25,37 +25,25 @@ logging.FileHandler(
     filename='main.log',
 )
 
-
 # homework-ya-bot
 bot = Bot(token=TELEGRAM_TOKEN)
 url = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 
 
 def parse_homework_status(homework):
-    gitname = homework['homeworks'][0]['homework_name'].split('__')[0]
-    message = f'Для github аккаунта "{gitname}" обновилась информация:\n\n'
+    homework_name = homework['homework_name']
 
-    # из предположения, что больше одной работы может поменять статус
-    # за время опроса
-    for homework_number in range(len(homework['homeworks'])):
-        homework_name = homework['homeworks'][homework_number]['lesson_name']
-        comment = homework['homeworks'][homework_number]['reviewer_comment']
+    if homework['status'] == 'reviewing':
+        verdict = f'Работа "{homework_name}" на ревью.'
+        return verdict
 
-        if homework['homeworks'][homework_number]['status'] == 'reviewing':
-            verdict = 'взята на ревью.'
+    elif homework['status'] == 'rejected':
+        verdict = f'К сожалению, в работе нашлись ошибки.'
 
-        elif homework['homeworks'][homework_number]['status'] == 'rejected':
-            verdict = f'содержит ошибки.\nКомментарий: {comment}'
+    else:
+        verdict = f'Ревьюеру всё понравилось, работа зачтена!'
 
-        else:
-            verdict = f'прошла проверку.\nКомментарий: {comment}'
-
-        message += f'Работа "{homework_name}": {verdict}'
-
-        # форматирование для нескольких работ
-        if homework_number + 1 != len(homework['homeworks']):
-            message += '\n\n'
-
+    message = f'У вас проверили работу "{homework_name}": {verdict}'
     return message
 
 
@@ -80,9 +68,6 @@ def get_homeworks(current_timestamp):
     except Exception as error:
         logging.error(f'Ошибка при запросе к основному API: {error}')
 
-    if not len(homework_statuses.json()['homeworks']):
-        return False
-
     return homework_statuses.json()
 
 
@@ -98,20 +83,35 @@ def main():
     # при запуске, бот выведет информацию по всем работам и начнет мониторить
     # изменения состояний
 
+    # есть предположение что в ответе, при мониторинге,
+    # может быть больше одной работы
+
     logging.debug('Запуск бота')
     current_timestamp = 0
 
     while True:
         try:
             homework = get_homeworks(current_timestamp)
+            homeworks = homework['homeworks']
 
-            if homework:
-                message = parse_homework_status(homework)
+            if homeworks:
+                try:
+                    gitname = homeworks[0]['homework_name'].split('__')[0]
+                    message = f'Для github аккаунта "{gitname}" обновилась информация:\n\n'
+                except Exception:
+                    logging.warning(
+                        f'gitname извлечь не получилось, обновился формат "homework_name"'
+                    )
+                    message = f'Oбновилась информация:\n\n'
+
+                for homework in homeworks:
+                    message += parse_homework_status(homework)
+                    message += '\n\n'
+
                 send_message(message)
                 logging.info(f'Отправлено сообщение: "{message}"')
 
             current_timestamp = int(time.time())
-
             time.sleep(15 * 60)
 
         except Exception as error:
