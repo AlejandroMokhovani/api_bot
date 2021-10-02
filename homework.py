@@ -2,6 +2,7 @@ import os
 import time
 import logging
 import requests
+import json
 
 from dotenv import load_dotenv
 from telegram import Bot
@@ -12,6 +13,9 @@ PRAKTIKUM_TOKEN = os.getenv('PRAKTIKUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
+# в секундах
+REQUEST_SLEEP = 15 * 60
+ERROR_SLEEP = 5
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -19,7 +23,6 @@ logging.basicConfig(
     format='%(asctime)s, %(levelname)s, %(message)s, %(name)s',
     filemode='a'
 )
-
 logging.StreamHandler()
 logging.FileHandler(
     filename='main.log',
@@ -31,42 +34,41 @@ url = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 
 
 def parse_homework_status(homework):
-    homework_name = homework['homework_name']
+    try:
+        homework_name = homework['homework_name']
+    except KeyError as error:
+        logging.error(f'{error}')
 
-    if homework['status'] == 'reviewing':
-        return f'Работа "{homework_name}" на ревью.'
-
-    elif homework['status'] == 'rejected':
-        verdict = 'К сожалению, в работе нашлись ошибки.'
-
-    else:
-        verdict = 'Ревьюеру всё понравилось, работа зачтена!'
+    dict_of_verdicts = {
+        'reviewing': 'Работа на ревью.',
+        'rejected': 'К сожалению, в работе нашлись ошибки.',
+        'approved': 'Ревьюеру всё понравилось, работа зачтена!',
+    }
+    try:
+        verdict = dict_of_verdicts[homework['status']]
+    except KeyError as error:
+        logging.error(f'{error}')
 
     return f'У вас проверили работу "{homework_name}": {verdict}'
 
 
 def get_homeworks(current_timestamp):
-    headers = {
-        'Authorization': f'OAuth {PRAKTIKUM_TOKEN}'
-    }
-    payload = {
-        'from_date': current_timestamp
-    }
-    homework_statuses = requests.get(
-        url,
-        headers=headers,
-        params=payload
-    )
+    headers = {'Authorization': f'OAuth {PRAKTIKUM_TOKEN}'}
+    payload = {'from_date': current_timestamp}
     try:
         homework_statuses = requests.get(
             url,
             headers=headers,
             params=payload
         )
-    except Exception as error:
-        logging.error(f'Ошибка при запросе к основному API: {error}')
+    except ConnectionError as error:
+        logging.error(f'{error}')
+    try:
+        homework = homework_statuses.json()
+    except json.decoder.JSONDecodeError as error:
+        print(f'{error}')
 
-    return homework_statuses.json()
+    return homework
 
 
 def send_message(message):
@@ -78,13 +80,11 @@ def send_message(message):
 
 def main():
 
-    # при запуске, бот выведет информацию по всем работам и начнет мониторить
-    # изменения состояний
-
     # есть предположение что в ответе, при мониторинге,
     # может быть больше одной работы
 
     logging.debug('Запуск бота')
+    # current_timestamp = int(time.time())
     current_timestamp = 0
 
     while True:
@@ -93,18 +93,7 @@ def main():
             homeworks = homework['homeworks']
 
             if homeworks:
-                try:
-                    gitname = homeworks[0]['homework_name'].split('__')[0]
-                    message = (
-                        f'Для github аккаунта "{gitname}"',
-                        ' обновилась информация:\n\n'
-                    )
-                except Exception:
-                    logging.warning(
-                        'gitname извлечь не получилось,',
-                        ' обновился формат "homework_name"'
-                    )
-                    message = 'Oбновилась информация:\n\n'
+                message = 'Oбновилась информация:\n\n'
 
                 for homework in homeworks:
                     message += parse_homework_status(homework)
@@ -113,13 +102,16 @@ def main():
                 send_message(message)
                 logging.info(f'Отправлено сообщение: "{message}"')
 
-            current_timestamp = int(time.time())
-            time.sleep(15 * 60)
+            try:
+                current_timestamp = homework['current_date']
+            except KeyError as error:
+                logging.error(f'{error}')
+            time.sleep(REQUEST_SLEEP)
 
         except Exception as error:
             logging.error(f'{error}')
             send_message(f'Бот упал с ошибкой: {error}')
-            time.sleep(5)
+            time.sleep(ERROR_SLEEP)
 
 
 if __name__ == '__main__':
