@@ -6,6 +6,7 @@ import json
 
 from dotenv import load_dotenv
 from telegram import Bot
+from requests.exceptions import RequestException
 
 load_dotenv()
 
@@ -37,7 +38,9 @@ def parse_homework_status(homework):
     try:
         homework_name = homework['homework_name']
     except KeyError as error:
-        logging.error(f'{error}')
+        msg = 'Ключ "homework_name" не найден'
+        logging.error(f'{msg}: {error}')
+        send_message(f'Бот упал с ошибкой:\n{msg}:\n{error}')
 
     dict_of_verdicts = {
         'reviewing': 'Работа на ревью.',
@@ -47,7 +50,9 @@ def parse_homework_status(homework):
     try:
         verdict = dict_of_verdicts[homework['status']]
     except KeyError as error:
-        logging.error(f'{error}')
+        msg = 'Статус работы не найден'
+        logging.error(f'{msg}: {error}')
+        send_message(f'Бот упал с ошибкой:\n{msg}:\n{error}')
 
     return f'У вас проверили работу "{homework_name}": {verdict}'
 
@@ -61,14 +66,16 @@ def get_homeworks(current_timestamp):
             headers=headers,
             params=payload
         )
-    except ConnectionError as error:
-        logging.error(f'{error}')
+    except RequestException as error:
+        msg = 'Ошибка при запросе к API'
+        logging.error(f'{msg}: {error}')
+        send_message(f'Бот упал с ошибкой:\n{msg}:\n{error}')
     try:
-        homework = homework_statuses.json()
+        return homework_statuses.json()
     except json.decoder.JSONDecodeError as error:
-        print(f'{error}')
-
-    return homework
+        msg = 'Ошибка десериализации'
+        logging.error(f'{msg}: {error}')
+        send_message(f'Бот упал с ошибкой:\n{msg}:\n{error}')
 
 
 def send_message(message):
@@ -84,13 +91,11 @@ def main():
     # может быть больше одной работы
 
     logging.debug('Запуск бота')
-    # current_timestamp = int(time.time())
-    current_timestamp = 0
-
+    current_timestamp = int(time.time())
     while True:
         try:
-            homework = get_homeworks(current_timestamp)
-            homeworks = homework['homeworks']
+            homeworks_dict = get_homeworks(current_timestamp)
+            homeworks = homeworks_dict['homeworks']
 
             if homeworks:
                 message = 'Oбновилась информация:\n\n'
@@ -103,9 +108,11 @@ def main():
                 logging.info(f'Отправлено сообщение: "{message}"')
 
             try:
-                current_timestamp = homework['current_date']
+                current_timestamp = homeworks_dict['current_date']
             except KeyError as error:
-                logging.error(f'{error}')
+                msg = 'Ошибка при запросе по ключу "current_date"'
+                logging.error(f'{msg}: {error}')
+                send_message(f'Бот упал с ошибкой:\n{msg}:\n{error}')
             time.sleep(REQUEST_SLEEP)
 
         except Exception as error:
