@@ -76,7 +76,7 @@ def get_homeworks(current_timestamp):
         msg = 'Ошибка десериализации'
         logging.error(f'{msg}: {error}')
         send_message(f'Бот упал с ошибкой:\n{msg}:\n{error}')
-        return []
+        return {}
 
 
 def send_message(message):
@@ -87,9 +87,6 @@ def send_message(message):
 
 
 def main():
-
-    # есть предположение что в ответе, при мониторинге,
-    # может быть больше одной работы
 
     logging.debug('Запуск бота')
     current_timestamp = int(time.time())
