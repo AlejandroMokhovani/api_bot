@@ -76,6 +76,7 @@ def get_homeworks(current_timestamp):
         msg = 'Ошибка десериализации'
         logging.error(f'{msg}: {error}')
         send_message(f'Бот упал с ошибкой:\n{msg}:\n{error}')
+        return []
 
 
 def send_message(message):
@@ -95,7 +96,12 @@ def main():
     while True:
         try:
             homeworks_dict = get_homeworks(current_timestamp)
-            homeworks = homeworks_dict['homeworks']
+            try:
+                homeworks = homeworks_dict['homeworks']
+            except KeyError as error:
+                msg = 'Ошибка при запросе по ключу "homeworks"'
+                logging.error(f'{msg}: {error}')
+                send_message(f'Бот упал с ошибкой:\n{msg}:\n{error}')
 
             if homeworks:
                 message = 'Oбновилась информация:\n\n'
